@@ -9,7 +9,8 @@ Use this as the reference when suggesting changes, generating new modules, or re
 
 A modular, idempotent, and versionable developer environment setup for Fedora/RHEL-based systems.
 Focused exclusively on developer productivity: terminal, Git, containers, and .NET SDK.
-Hardware-specific configuration (GPU, power management) is explicitly out of scope.
+GPU configuration is supported via a dedicated standalone script and explicit setup flags.
+Power mode / energy tuning remains explicitly out of scope.
 
 ---
 
@@ -22,7 +23,8 @@ dev-setup/
 │   ├── base.sh              # CLI productivity tools (dnf packages)
 │   ├── terminal.sh          # Zsh + Oh My Zsh + plugins + Starship + dotfile deploy
 │   ├── dev.sh               # LazyGit + .NET SDK
-│   └── containers.sh        # Podman stack + Docker compat + docker compose + optional UI
+│   ├── containers.sh        # Podman stack + Docker compat + docker compose + optional UI
+│   └── gpu.sh               # Standalone NVIDIA setup with profile/action arguments
 └── dotfiles/
     └── .zshrc               # Shell config deployed by terminal.sh via cp
 ```
@@ -74,8 +76,9 @@ All scripts must use consistent log prefixes for clarity during execution:
 
 ### setup.sh
 - Parses optional flags before calling any module.
-- Current flags: `--ui` (enables Podman Desktop installation).
+- Current flags: `--ui`, `--gpu-alienware`, `--gpu-lenovo`.
 - Passes flags as positional arguments to the relevant module (`containers.sh "$INSTALL_UI"`).
+- Calls `gpu.sh` only when a GPU flag is provided.
 - Never contains installation logic directly.
 
 ### base.sh
@@ -101,6 +104,14 @@ All scripts must use consistent log prefixes for clarity during execution:
   3. `podman.socket` (systemctl user service)
   4. `docker compose` plugin (try dnf → fallback to manual binary install)
   5. Podman Desktop via Flatpak (only if `INSTALL_UI=true`)
+
+### gpu.sh
+- Accepts `$1` as `GPU_PROFILE` and `$2` as `ACTION` (`install|undo|reset`, default: `install`).
+- Must fail fast for unsupported profiles.
+- Current profiles:
+  1. `alienware` (implemented)
+  2. `lenovo` (reserved, intentionally returns error until implemented)
+- Must avoid any power mode tuning or always-on GPU policy.
 
 ---
 
@@ -149,6 +160,7 @@ It is deployed on every run of `terminal.sh` via `cp dotfiles/.zshrc ~/.zshrc`.
 | V1 | Original monolithic script (see `originais/setup-dev.sh`) |
 | V2 | Improved idempotency, logging, arch detection, `.zshrc` guard (see `originais/setup-dev-v2.sh`) |
 | V3 | Modular structure, `--ui` flag, Docker compat (`podman-docker`), `docker compose` plugin with fallback |
+| V3.1 | Optional standalone GPU module with profile-based flags and install/undo/reset actions |
 
 When evolving to a new version:
 - Increment what changes; keep working parts intact.
@@ -160,7 +172,6 @@ When evolving to a new version:
 
 ## What Is Intentionally Not Included
 
-- GPU drivers or configuration
 - Power mode / performance tuning
 - Docker Engine (replaced by Podman)
 - Docker Desktop

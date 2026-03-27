@@ -1,21 +1,27 @@
 # Dev Setup — V3 (Modular, Idempotent, Versionable)
 
 Modular developer environment setup for Fedora/RHEL-based systems.
-All scripts are idempotent — safe to run multiple times on a fresh or already-configured machine.
+All scripts are idempotent and safe to re-run on fresh or already-configured machines.
 
-Scope: **developer productivity only** — terminal, Git, containers, .NET SDK.
-Out of scope: GPU configuration, power management.
+Scope:
+- Dev productivity stack: terminal, Git, containers, .NET SDK
+- Optional NVIDIA GPU setup via dedicated standalone script and setup flags
+
+Out of scope:
+- Power mode tuning
+- Energy profile automation
 
 ## Project Structure
 
 ```text
 dev-setup/
-├── setup.sh                  # Orchestrator — runs all modules in order
+├── setup.sh                  # Orchestrator — parses flags and runs modules in order
 ├── scripts/
 │   ├── base.sh               # CLI productivity tools
-│   ├── terminal.sh           # Zsh + Oh My Zsh + Starship + dotfile
+│   ├── terminal.sh           # Zsh + Oh My Zsh + plugins + Starship + dotfile deploy
 │   ├── dev.sh                # LazyGit + .NET SDK
-│   └── containers.sh         # Podman full stack + Docker compat + optional UI
+│   ├── containers.sh         # Podman stack + Docker compatibility + optional UI
+│   └── gpu.sh                # Standalone NVIDIA setup (profile-based, with install/undo/reset)
 └── dotfiles/
     └── .zshrc                # Shell configuration deployed by terminal.sh
 ```
@@ -29,104 +35,109 @@ dev-setup/
 | Terminal stack | `zsh`, Oh My Zsh, autosuggestions, syntax highlighting, `starship` |
 | Dev tools | `lazygit`, `.NET SDK 10` |
 | Containers | `podman`, `podman-compose`, `podman-docker`, `docker compose` plugin, `podman.socket` |
-| Optional UI | Podman Desktop (Flatpak, via `--ui` flag) |
+| Optional UI | Podman Desktop (Flatpak, via `--ui`) |
+| GPU script | NVIDIA profile support (`alienware` implemented, `lenovo` reserved) |
 
-## How To Run
+## Setup Usage
 
 ```bash
-# 1. Clone your repository
+# 1. Clone the repository
 git clone https://github.com/rdpresser/setup-dev.git
 cd setup-dev/dev-setup
 
 # 2. Make scripts executable
 chmod +x setup.sh scripts/*.sh
 
-# 3a. Standard setup (no UI)
+# 3a. Standard dev setup
 ./setup.sh
 
-# 3b. Full setup with Podman Desktop UI
+# 3b. Dev setup + Podman Desktop
 ./setup.sh --ui
 
-# 4. Restart your session to apply the new shell
-logout
+# 3c. Dev setup + NVIDIA profile
+./setup.sh --gpu-alienware
+
+# 3d. Full setup (dev + UI + GPU)
+./setup.sh --ui --gpu-alienware
 ```
 
-> **`--ui` flag**: installs Podman Desktop via Flatpak. The application does not auto-launch; open it manually from your system menu. On first launch, an interactive onboarding wizard will appear (Next → Next → Finish).
+`setup.sh` validates unknown arguments and exits with error for unsupported flags.
 
-## Execution Order & Commands
+## Standalone GPU Script Usage
+
+```bash
+# Install/repair NVIDIA for Alienware profile
+sudo bash scripts/gpu.sh alienware install
+
+# Undo NVIDIA packages and managed config
+sudo bash scripts/gpu.sh alienware undo
+
+# Redo from scratch (undo + install)
+sudo bash scripts/gpu.sh alienware reset
+```
+
+Supported profiles:
+- `alienware`: implemented
+- `lenovo`: reserved and intentionally returns an error until implemented
+
+## Execution Order (Command Summary)
 
 ### Base (`scripts/base.sh`)
 
-| # | Command | Description |
+| # | Description | Command |
 |---|---|---|
-| 1 | `dnf install git` | Version control |
-| 2 | `dnf install curl wget` | Download utilities |
-| 3 | `dnf install unzip` | Archive extraction |
-| 4 | `dnf install fzf` | Fuzzy finder (Ctrl+R, file search) |
-| 5 | `dnf install ripgrep` | Fast code search (`rg`) |
-| 6 | `dnf install bat` | Syntax-highlighted file viewer |
-| 7 | `dnf install eza` | Modern `ls` with icons |
-| 8 | `dnf install zoxide` | Smart `cd` with frecency |
+| 1 | Install base CLI | `sudo dnf install -y git curl wget unzip fzf ripgrep bat eza zoxide` |
 
 ### Terminal (`scripts/terminal.sh`)
 
-| # | Command | Description |
+| # | Description | Command |
 |---|---|---|
-| 9 | `dnf install zsh` | Zsh shell |
-| 10 | `chsh -s /usr/bin/zsh` | Set Zsh as default shell |
-| 11 | `install oh-my-zsh --unattended` | Shell framework |
-| 12 | `git clone zsh-autosuggestions` | Fish-like suggestions |
-| 13 | `git clone zsh-syntax-highlighting` | Command highlighting |
-| 14 | `curl starship install.sh` | Cross-shell prompt |
-| 15 | `cp dotfiles/.zshrc ~/.zshrc` | Deploy shell configuration |
+| 2 | Install Zsh | `sudo dnf install -y zsh` |
+| 3 | Set default shell | `chsh -s /usr/bin/zsh $USER` |
+| 4 | Install Oh My Zsh | `sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended` |
+| 5 | Install plugins | `git clone ... zsh-autosuggestions` and `git clone ... zsh-syntax-highlighting` |
+| 6 | Install Starship | `curl -sS https://starship.rs/install.sh | sh -s -- -y` |
+| 7 | Deploy shell config | `cp dotfiles/.zshrc ~/.zshrc` |
 
 ### Dev (`scripts/dev.sh`)
 
-| # | Command | Description |
+| # | Description | Command |
 |---|---|---|
-| 16 | `curl lazygit release` + `install` | Terminal Git UI |
-| 17 | `dnf install dotnet-sdk-10.0` | .NET 10 SDK |
+| 8 | Install LazyGit | `curl` + `tar` + `sudo install` |
+| 9 | Install .NET SDK 10 | `sudo dnf install -y dotnet-sdk-10.0` |
 
 ### Containers (`scripts/containers.sh`)
 
-| # | Command | Description |
+| # | Description | Command |
 |---|---|---|
-| 18 | `dnf install podman` | Container engine |
-| 19 | `dnf install podman-compose` | Legacy compose helper (fallback) |
-| 20 | `dnf install podman-docker` | Docker CLI shim → maps `docker` to Podman |
-| 21 | `systemctl --user enable --now podman.socket` | User socket for VS Code and SDK integrations |
-| 22 | `dnf install docker-compose-plugin` (or manual binary fallback) | Modern `docker compose` subcommand |
-| 23 | `flatpak install io.podman_desktop.PodmanDesktop` | Podman Desktop UI (only with `--ui`) |
+| 10 | Install Podman stack | `sudo dnf install -y podman podman-compose` |
+| 11 | Install Docker CLI shim if missing | `sudo dnf install -y podman-docker` |
+| 12 | Enable Podman socket | `systemctl --user enable --now podman.socket` |
+| 13 | Install Docker Compose plugin | `sudo dnf install -y docker-compose-plugin` |
+| 14 | Compose fallback if dnf fails | `curl ... -o ~/.docker/cli-plugins/docker-compose && chmod +x ...` |
+| 15 | Optional Podman Desktop | `flatpak install -y flathub io.podman_desktop.PodmanDesktop` |
 
-## Container Stack Explained
+### GPU Optional (`scripts/gpu.sh`)
 
-```
-Your command          What runs underneath
-─────────────────── → ──────────────────────
-docker ps             Podman (via podman-docker shim)
-docker compose up     Docker Compose plugin → Podman socket
-podman-compose up     podman-compose (legacy, still available)
-```
-
-## Productivity Summary
-
-| Area | Tool | Benefit |
+| # | Description | Command |
 |---|---|---|
-| Search | `ripgrep` + `fzf` | Instant code/file search |
-| Navigation | `zoxide` | Jump to any directory by name |
-| Readability | `bat` + `eza` | Better `cat` and `ls` |
-| Git | `lazygit` + aliases | Full Git UI in the terminal |
-| Prompt | `starship` | Context-aware, fast prompt |
-| Containers | `podman` + `docker compose` | Docker-compatible, daemonless |
-| Backend | `.NET SDK 10` | Build and run .NET apps |
+| 16 | Add RPM Fusion if missing | `dnf install -y rpmfusion-free-release ... rpmfusion-nonfree-release ...` |
+| 17 | Refresh packages | `dnf upgrade --refresh -y` |
+| 18 | Install NVIDIA driver stack if missing | `dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda` |
+| 19 | Ensure build dependencies | `dnf install -y kernel-devel kernel-headers gcc make dkms` |
+| 20 | Rebuild modules/initramfs | `akmods --force` and `dracut --force` |
+| 21 | Write PRIME config (managed) | `/etc/modprobe.d/nvidia-prime.conf` |
 
-## Re-running the Setup
+## Re-run and Idempotency Notes
 
-All modules are idempotent — re-running `./setup.sh` is safe:
-- `dnf install` skips already-installed packages
-- `git clone` only runs if plugin directory does not exist
-- `lazygit` / `dotnet` / `starship` install only if binary is absent
-- `podman-docker` installs only if `docker` is not in PATH
-- `docker compose` installs only if `docker compose version` fails
-- `flatpak install` skips if already installed
+Re-running is expected and supported:
+- `dnf install -y` skips installed packages
+- plugin clones run only when directories are missing
+- GPU script checks managed files and installed packages before writing/installing
+- Compose installation checks `docker compose version` first
+- Podman Desktop install is optional and only runs with `--ui`
 
+GPU script supports operational modes:
+- `install`: only apply what is missing
+- `undo`: remove managed NVIDIA stack and config
+- `reset`: undo then install
