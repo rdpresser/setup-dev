@@ -33,9 +33,11 @@ alias ga="git add ."
 alias gc="git commit -m"
 alias gp="git push"
 
-alias dc="podman-compose"
-alias dcu="podman-compose up -d"
-alias dcd="podman-compose down"
+# Container aliases use 'docker compose' (backed by Podman via podman-docker)
+# podman-compose remains installed as a fallback if needed directly
+alias dc="docker compose"
+alias dcu="docker compose up -d"
+alias dcd="docker compose down"
 
 alias ls="eza --icons"
 alias ll="eza -lah --icons"
